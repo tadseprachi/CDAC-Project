@@ -1,0 +1,101 @@
+Jenkins
+
+
+
+
+
+
+
+
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-west-2' //
+        TERRAFORM_DIR = 'terraform' 
+        ANSIBLE_DIR = 'ansible'
+        PACKER_DIR = 'packer' 
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                
+                checkout scm
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                script {
+                    dir(TERRAFORM_DIR) {
+                        sh 'terraform init'
+                        sh 'terraform apply -auto-approve'
+                    }
+                }
+            }
+        }
+
+        stage('Wait for EC2 Instance') {
+            steps {
+                script {
+                    sleep(time: 60, unit: 'SECONDS')
+                }
+            }
+        }
+
+        stage('Run AWS Inspector') {
+            steps {
+                script {
+                    sh '''
+                    aws inspector start-assessment-run --assessment-template-arn arn:aws:inspector:ap-south-1:123456789012:template/0-abcdefg
+                    '''
+                }
+            }
+        }
+
+        stage('Run OpenSCAP') {
+            steps {
+                script {
+                    sh '''
+                    oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced --results-arf arf.xml --report report.html /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml
+                    '''
+                }
+            }
+        }
+
+        stage('Apply Ansible Remediation') {
+            steps {
+                script {
+                    dir(ANSIBLE_DIR) {
+                        sh 'ansible-playbook -i inventory playbook.yml'
+                    }
+                }
+            }
+        }
+
+        stage('Create AMI with Packer') {
+            steps {
+                script {
+                    dir(PACKER_DIR) {
+                        sh 'packer build packer-template.json'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Cleaning up...'
+        }
+
+        success {
+            echo 'Pipeline succeeded!'
+        }
+
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}

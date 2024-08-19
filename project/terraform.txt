@@ -1,0 +1,16 @@
+provider "aws" {
+  region = "ap-south-1"
+}
+
+resource "aws_instance" "intro" {
+
+  ami                    = "ami-0ad21ae1d0696ad58"
+  instance_type          = "t2.micro"
+  availability_zone      = "ap-south-1a"
+  key_name               = "kkk"
+  vpc_security_group_ids = ["sg-03dbba0c29ba8dca5"]
+
+  tags = {
+    Name = "ubuntu-instance"
+  }
+}
